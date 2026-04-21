@@ -1,0 +1,110 @@
+package com.ft.notification.application;
+
+import com.ft.common.exception.CustomException;
+import com.ft.notification.application.dto.NotificationResult;
+import com.ft.notification.application.dto.NotificationSettingsResult;
+import com.ft.notification.application.port.NotificationRepository;
+import com.ft.notification.application.port.NotificationSettingsRepository;
+import com.ft.notification.domain.NotificationChannel;
+import com.ft.notification.domain.NotificationLog;
+import com.ft.notification.domain.NotificationSettings;
+import com.ft.notification.domain.NotificationType;
+import com.ft.notification.domain.sender.NotificationSender;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static com.ft.common.exception.ErrorCode.NOTIFICATION_NOT_FOUND;
+
+@Slf4j
+@Service
+public class NotificationService {
+
+    private final NotificationRepository notificationRepository;
+    private final NotificationSettingsRepository notificationSettingsRepository;
+    private final Map<NotificationChannel, NotificationSender> senderMap;
+
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            NotificationSettingsRepository notificationSettingsRepository,
+            List<NotificationSender> senders
+    ) {
+        this.notificationRepository = notificationRepository;
+        this.notificationSettingsRepository = notificationSettingsRepository;
+        this.senderMap = senders.stream()
+                .collect(Collectors.toMap(NotificationSender::channel, Function.identity()));
+    }
+
+    // 알림 목록 조회 (페이지네이션, 읽음 여부 필터)
+    @Transactional(readOnly = true)
+    public Page<NotificationResult> findAll(Long userId, Boolean isRead, Pageable pageable) {
+        return notificationRepository.findAllByUserId(userId, isRead, pageable)
+                .map(NotificationResult::from);
+    }
+
+    // 단건 읽음 처리
+    @Transactional
+    public NotificationResult markAsRead(Long userId, Long notificationId) {
+        NotificationLog log = getNotificationLog(notificationId);
+        log.validateOwner(userId);
+        log.markAsRead();
+        return NotificationResult.from(log);
+    }
+
+    // 전체 읽음 처리
+    @Transactional
+    public void markAllAsRead(Long userId) {
+        notificationRepository.markAllAsReadByUserId(userId);
+    }
+
+    // TODO: [Kafka 도입 시] 이 메서드를 직접 호출하는 대신 Kafka Consumer에서 호출
+    // @KafkaListener(topics = "budget.alert", groupId = "notification-service")
+    // public void onBudgetAlert(BudgetAlertEvent event) {
+    //     send(event.userId(), event.type(), event.title(), event.message());
+    // }
+    @Transactional
+    public void send(Long userId, NotificationType type, String title, String message) {
+        senderMap.forEach((channel, sender) -> {
+            boolean success = false;
+            try {
+                success = sender.send(userId, type, title, message);
+            } catch (Exception e) {
+                log.error("[Notification] 발송 실패 — channel={}, userId={}, error={}",
+                        channel, userId, e.getMessage());
+            }
+
+            NotificationLog notificationLog = NotificationLog.create(
+                    userId, type, channel, title, message, success);
+            notificationRepository.save(notificationLog);
+
+            log.info("[Notification] 발송 완료 — channel={}, userId={}, type={}, success={}",
+                    channel, userId, type, success);
+        });
+    }
+
+    @Transactional
+    public NotificationSettingsResult updateSettings(Long userId, boolean fcmEnabled, boolean emailEnabled) {
+        NotificationSettings settings = notificationSettingsRepository.findByUserId(userId)
+                .map(existing -> {
+                    existing.update(fcmEnabled, emailEnabled);
+                    return existing;
+                })
+                .orElse(NotificationSettings.create(userId, fcmEnabled, emailEnabled));
+
+        NotificationSettings saved = notificationSettingsRepository.save(settings);
+        log.info("[Notification] 설정 저장 — userId={}, fcm={}, email={}", userId, fcmEnabled, emailEnabled);
+        return NotificationSettingsResult.of(saved.getUserId(), saved.isFcmEnabled(), saved.isEmailEnabled());
+    }
+
+    private NotificationLog getNotificationLog(Long notificationId) {
+        return notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new CustomException(NOTIFICATION_NOT_FOUND));
+    }
+}
