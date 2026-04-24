@@ -9,6 +9,23 @@ spring:
       hibernate:
         format_sql: true
     show-sql: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+    # username / password 는 Config Server의 fintracking-notification-secret.yml 에서 주입
+    # spring.mail.username: {cipher}...
+    # spring.mail.password: {cipher}...
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
 
 server:
   port: 0

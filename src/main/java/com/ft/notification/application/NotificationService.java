@@ -6,6 +6,7 @@ import com.ft.notification.application.dto.NotificationSettingsResult;
 import com.ft.notification.application.port.NotificationRepository;
 import com.ft.notification.application.port.NotificationSettingsRepository;
 import com.ft.notification.domain.NotificationChannel;
+import com.ft.notification.domain.NotificationContext;
 import com.ft.notification.domain.NotificationLog;
 import com.ft.notification.domain.NotificationSettings;
 import com.ft.notification.domain.NotificationType;
@@ -64,43 +65,64 @@ public class NotificationService {
         notificationRepository.markAllAsReadByUserId(userId);
     }
 
-    // TODO: [Kafka 도입 시] 이 메서드를 직접 호출하는 대신 Kafka Consumer에서 호출
-    // @KafkaListener(topics = "budget.alert", groupId = "notification-service")
-    // public void onBudgetAlert(BudgetAlertEvent event) {
-    //     send(event.userId(), event.type(), event.title(), event.message());
-    // }
     @Transactional
     public void send(Long userId, NotificationType type, String title, String message) {
+        NotificationSettings settings = notificationSettingsRepository.findByUserId(userId).orElse(null);
+
+        NotificationContext context = new NotificationContext(
+                userId,
+                settings != null ? settings.getEmail() : null,
+                settings != null ? settings.getFcmToken() : null,
+                type,
+                title,
+                message
+        );
+
         senderMap.forEach((channel, sender) -> {
+            if (!isChannelEnabled(channel, settings)) {
+                log.debug("[Notification] 채널 비활성 스킵 — channel={}, userId={}", channel, userId);
+                return;
+            }
+
             boolean success = false;
             try {
-                success = sender.send(userId, type, title, message);
+                success = sender.send(context);
             } catch (Exception e) {
                 log.error("[Notification] 발송 실패 — channel={}, userId={}, error={}",
                         channel, userId, e.getMessage());
             }
 
-            NotificationLog notificationLog = NotificationLog.create(
-                    userId, type, channel, title, message, success);
-            notificationRepository.save(notificationLog);
-
+            notificationRepository.save(NotificationLog.create(userId, type, channel, title, message, success));
             log.info("[Notification] 발송 완료 — channel={}, userId={}, type={}, success={}",
                     channel, userId, type, success);
         });
     }
 
     @Transactional
-    public NotificationSettingsResult updateSettings(Long userId, boolean fcmEnabled, boolean emailEnabled) {
+    public NotificationSettingsResult updateSettings(
+            Long userId, boolean fcmEnabled, boolean emailEnabled, String email, String fcmToken) {
         NotificationSettings settings = notificationSettingsRepository.findByUserId(userId)
                 .map(existing -> {
-                    existing.update(fcmEnabled, emailEnabled);
+                    existing.update(fcmEnabled, emailEnabled, email, fcmToken);
                     return existing;
                 })
-                .orElse(NotificationSettings.create(userId, fcmEnabled, emailEnabled));
+                .orElse(NotificationSettings.create(userId, fcmEnabled, emailEnabled, email, fcmToken));
 
         NotificationSettings saved = notificationSettingsRepository.save(settings);
         log.info("[Notification] 설정 저장 — userId={}, fcm={}, email={}", userId, fcmEnabled, emailEnabled);
-        return NotificationSettingsResult.of(saved.getUserId(), saved.isFcmEnabled(), saved.isEmailEnabled());
+        return NotificationSettingsResult.of(saved.getUserId(), saved.isFcmEnabled(), saved.isEmailEnabled(), saved.getEmail(), saved.getFcmToken());
+    }
+
+    /**
+     * IN_APP은 항상 활성, EMAIL/FCM은 사용자 설정에 따라 판단.
+     * 설정이 없으면 IN_APP만 발송.
+     */
+    private boolean isChannelEnabled(NotificationChannel channel, NotificationSettings settings) {
+        return switch (channel) {
+            case IN_APP -> true;
+            case EMAIL -> settings != null && settings.isEmailEnabled() && settings.getEmail() != null;
+            case FCM -> settings != null && settings.isFcmEnabled() && settings.getFcmToken() != null;
+        };
     }
 
     private NotificationLog getNotificationLog(Long notificationId) {

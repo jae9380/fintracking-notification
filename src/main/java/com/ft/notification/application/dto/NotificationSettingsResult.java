@@ -3,9 +3,11 @@ package com.ft.notification.application.dto;
 public record NotificationSettingsResult(
         Long userId,
         boolean fcmEnabled,
-        boolean emailEnabled
+        boolean emailEnabled,
+        String email,
+        String fcmToken
 ) {
-    public static NotificationSettingsResult of(Long userId, boolean fcmEnabled, boolean emailEnabled) {
-        return new NotificationSettingsResult(userId, fcmEnabled, emailEnabled);
+    public static NotificationSettingsResult of(Long userId, boolean fcmEnabled, boolean emailEnabled, String email, String fcmToken) {
+        return new NotificationSettingsResult(userId, fcmEnabled, emailEnabled, email, fcmToken);
     }
 }

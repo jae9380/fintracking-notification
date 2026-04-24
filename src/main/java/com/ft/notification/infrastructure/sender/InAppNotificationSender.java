@@ -1,7 +1,7 @@
 package com.ft.notification.infrastructure.sender;
 
 import com.ft.notification.domain.NotificationChannel;
-import com.ft.notification.domain.NotificationType;
+import com.ft.notification.domain.NotificationContext;
 import com.ft.notification.domain.sender.NotificationSender;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,8 +16,8 @@ import org.springframework.stereotype.Component;
 public class InAppNotificationSender implements NotificationSender {
 
     @Override
-    public boolean send(Long userId, NotificationType type, String title, String message) {
-        log.info("[InApp] 알림 생성 — userId={}, type={}, title={}", userId, type, title);
+    public boolean send(NotificationContext context) {
+        log.info("[InApp] 알림 생성 — userId={}, type={}, title={}", context.userId(), context.type(), context.title());
         return true;
     }
 

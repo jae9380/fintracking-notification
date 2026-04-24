@@ -60,7 +60,7 @@ public class NotificationController {
             @RequestBody NotificationSettingsRequest request
     ) {
         NotificationSettingsResponse response = NotificationSettingsResponse.from(
-                notificationService.updateSettings(userId, request.fcmEnabled(), request.emailEnabled())
+                notificationService.updateSettings(userId, request.fcmEnabled(), request.emailEnabled(), request.email(), request.fcmToken())
         );
         return ApiResponse.success(response);
     }

@@ -2,6 +2,8 @@ package com.ft.notification.presentation.dto;
 
 public record NotificationSettingsRequest(
         boolean fcmEnabled,
-        boolean emailEnabled
+        boolean emailEnabled,
+        String email,
+        String fcmToken
 ) {
 }

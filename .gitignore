@@ -38,3 +38,4 @@ out/
 
 ### Custom ###
 .DS_Store
+src/test/resources/email-test.properties

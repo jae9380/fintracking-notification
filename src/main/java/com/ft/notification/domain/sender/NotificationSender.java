@@ -1,7 +1,7 @@
 package com.ft.notification.domain.sender;
 
 import com.ft.notification.domain.NotificationChannel;
-import com.ft.notification.domain.NotificationType;
+import com.ft.notification.domain.NotificationContext;
 
 /**
  * Observer 패턴 — 알림 채널 추상화 인터페이스.
@@ -11,10 +11,11 @@ public interface NotificationSender {
 
     /**
      * 알림을 실제 채널(FCM / Email 등)로 발송한다.
+     * NotificationContext에서 채널별로 필요한 정보(email, fcmToken 등)를 꺼내 사용한다.
      *
      * @return 발송 성공 여부
      */
-    boolean send(Long userId, NotificationType type, String title, String message);
+    boolean send(NotificationContext context);
 
     /**
      * 이 Sender가 담당하는 채널 종류를 반환한다.
