@@ -4,6 +4,7 @@ import com.ft.common.exception.CustomException;
 import com.ft.notification.domain.NotificationChannel;
 import com.ft.notification.domain.NotificationContext;
 import com.ft.notification.domain.sender.NotificationSender;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class EmailNotificationSender implements NotificationSender {
     private final TemplateEngine templateEngine;
 
     @Override
+    @CircuitBreaker(name = "emailSender", fallbackMethod = "sendFallback")
     public boolean send(NotificationContext notificationContext) {
         Context context = new Context();
         context.setVariable("title", notificationContext.title());
@@ -61,6 +63,13 @@ public class EmailNotificationSender implements NotificationSender {
         log.info("[Email] 발송 완료 — userId={}, email={}, title={}",
                 notificationContext.userId(), notificationContext.email(), notificationContext.title());
         return true;
+    }
+
+    // Circuit OPEN 또는 실패 누적 시 호출 — SMTP 장애 상황에서 알림 유실 방지
+    private boolean sendFallback(NotificationContext notificationContext, Throwable t) {
+        log.warn("[Email][CircuitBreaker] 이메일 발송 차단 — userId={}, email={}, reason={}",
+                notificationContext.userId(), notificationContext.email(), t.getMessage());
+        return false;
     }
 
     @Override
