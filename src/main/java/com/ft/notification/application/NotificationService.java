@@ -1,6 +1,7 @@
 package com.ft.notification.application;
 
 import com.ft.common.exception.CustomException;
+import com.ft.common.metric.annotation.Monitored;
 import com.ft.notification.application.dto.NotificationResult;
 import com.ft.notification.application.dto.NotificationSettingsResult;
 import com.ft.notification.application.port.NotificationRepository;
@@ -44,6 +45,7 @@ public class NotificationService {
     }
 
     // 알림 목록 조회 (페이지네이션, 읽음 여부 필터)
+    @Monitored(domain = "notification", layer = "service", api = "find_all")
     @Transactional(readOnly = true)
     public Page<NotificationResult> findAll(Long userId, Boolean isRead, Pageable pageable) {
         return notificationRepository.findAllByUserId(userId, isRead, pageable)
@@ -51,20 +53,24 @@ public class NotificationService {
     }
 
     // 단건 읽음 처리
+    @Monitored(domain = "notification", layer = "service", api = "mark_as_read")
     @Transactional
     public NotificationResult markAsRead(Long userId, Long notificationId) {
-        NotificationLog log = getNotificationLog(notificationId);
-        log.validateOwner(userId);
-        log.markAsRead();
-        return NotificationResult.from(log);
+        NotificationLog notificationLog = getNotificationLog(notificationId);
+        notificationLog.validateOwner(userId);
+        notificationLog.markAsRead();
+        return NotificationResult.from(notificationLog);
     }
 
     // 전체 읽음 처리
+    @Monitored(domain = "notification", layer = "service", api = "mark_all_as_read")
     @Transactional
     public void markAllAsRead(Long userId) {
         notificationRepository.markAllAsReadByUserId(userId);
     }
 
+    // 알림 발송
+    @Monitored(domain = "notification", layer = "service", api = "send")
     @Transactional
     public void send(Long userId, NotificationType type, String title, String message) {
         NotificationSettings settings = notificationSettingsRepository.findByUserId(userId).orElse(null);
@@ -98,6 +104,8 @@ public class NotificationService {
         });
     }
 
+    // 알림 설정 저장/수정
+    @Monitored(domain = "notification", layer = "service", api = "update_settings")
     @Transactional
     public NotificationSettingsResult updateSettings(
             Long userId, boolean fcmEnabled, boolean emailEnabled, String email, String fcmToken) {

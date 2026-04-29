@@ -1,10 +1,12 @@
 package com.ft.notification.infrastructure.sender;
 
 import com.ft.common.exception.CustomException;
+import com.ft.common.metric.helper.ExternalApiMetricHelper;
 import com.ft.notification.domain.NotificationChannel;
 import com.ft.notification.domain.NotificationContext;
 import com.ft.notification.domain.sender.NotificationSender;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.micrometer.core.instrument.Timer;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -29,24 +31,29 @@ import static com.ft.common.exception.ErrorCode.NOTIFICATION_SEND_FAILED;
 public class EmailNotificationSender implements NotificationSender {
 
     private static final String EMAIL_TEMPLATE = "budget-alert-email";
+    private static final String SYSTEM = "smtp";
+    private static final String OPERATION = "send_email";
 
     @Value("${spring.mail.username}")
     private String fromAddress;
 
     private final JavaMailSender javaMailSender;
     private final TemplateEngine templateEngine;
+    private final ExternalApiMetricHelper metricHelper;
 
     @Override
     @CircuitBreaker(name = "emailSender", fallbackMethod = "sendFallback")
     public boolean send(NotificationContext notificationContext) {
-        Context context = new Context();
-        context.setVariable("title", notificationContext.title());
-        context.setVariable("message", notificationContext.message());
-        context.setVariable("type", notificationContext.type().name());
-
-        String htmlContent = templateEngine.process(EMAIL_TEMPLATE, context);
+        Timer.Sample sample = metricHelper.startSample();
 
         try {
+            Context context = new Context();
+            context.setVariable("title", notificationContext.title());
+            context.setVariable("message", notificationContext.message());
+            context.setVariable("type", notificationContext.type().name());
+
+            String htmlContent = templateEngine.process(EMAIL_TEMPLATE, context);
+
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "utf-8");
             helper.setFrom("FinTracking <" + fromAddress + ">");
@@ -54,15 +61,21 @@ public class EmailNotificationSender implements NotificationSender {
             helper.setSubject("[FinTracking] " + notificationContext.title());
             helper.setText(htmlContent, true);
             javaMailSender.send(mimeMessage);
+
+            metricHelper.success(SYSTEM, OPERATION).increment();
+            log.info("[Email] 발송 완료 — userId={}, email={}, title={}",
+                    notificationContext.userId(), notificationContext.email(), notificationContext.title());
+            return true;
+
         } catch (MessagingException e) {
+            metricHelper.fail(SYSTEM, OPERATION, "MessagingException").increment();
             log.error("[Email] 발송 실패 — userId={}, email={}, error={}",
                     notificationContext.userId(), notificationContext.email(), e.getMessage());
             throw new CustomException(NOTIFICATION_SEND_FAILED);
-        }
 
-        log.info("[Email] 발송 완료 — userId={}, email={}, title={}",
-                notificationContext.userId(), notificationContext.email(), notificationContext.title());
-        return true;
+        } finally {
+            sample.stop(metricHelper.timer(SYSTEM, OPERATION));
+        }
     }
 
     // Circuit OPEN 또는 실패 누적 시 호출 — SMTP 장애 상황에서 알림 유실 방지

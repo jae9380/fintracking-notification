@@ -1,7 +1,9 @@
 package com.ft.notification.infrastructure.sender;
 
+import com.ft.common.metric.helper.ExternalApiMetricHelper;
 import com.ft.notification.domain.NotificationContext;
 import com.ft.notification.domain.NotificationType;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +43,8 @@ class EmailNotificationSenderTest {
         // 설정이 없으면 테스트 스킵
         assumeTrue(!username.startsWith("YOUR_"), "email-test.properties에 실제 계정 정보를 입력하세요.");
 
-        sender = new EmailNotificationSender(buildMailSender(username, password), buildTemplateEngine());
+        ExternalApiMetricHelper metricHelper = new ExternalApiMetricHelper(new SimpleMeterRegistry());
+        sender = new EmailNotificationSender(buildMailSender(username, password), buildTemplateEngine(), metricHelper);
         ReflectionTestUtils.setField(sender, "fromAddress", username);
     }
 

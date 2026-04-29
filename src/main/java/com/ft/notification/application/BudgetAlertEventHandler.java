@@ -3,6 +3,7 @@ package com.ft.notification.application;
 import com.ft.common.event.BudgetAlertEvent;
 import com.ft.common.kafka.EventHandler;
 import com.ft.common.kafka.KafkaTopic;
+import com.ft.common.metric.annotation.MonitoredKafka;
 import com.ft.notification.domain.NotificationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class BudgetAlertEventHandler implements EventHandler<BudgetAlertEvent> {
 
     private final NotificationService notificationService;
 
+    @MonitoredKafka(topic = KafkaTopic.BUDGET_ALERT, action = "consume")
     @KafkaListener(topics = KafkaTopic.BUDGET_ALERT, groupId = "notification-service")
     @Override
     public void handle(BudgetAlertEvent event) {
