@@ -31,7 +31,7 @@ repositories {
 
 dependencies {
     // Common
-    implementation 'com.ft:fintracking-common:1.0.8'
+    implementation 'com.ft:fintracking-common:1.1.1'
 
     // Thymeleaf 템플릿
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
@@ -75,6 +75,9 @@ dependencies {
     // Micrometer Tracing (Zipkin)
     implementation 'io.micrometer:micrometer-tracing-bridge-brave'
     implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
+
+    // Prometheus
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
     //  Swagger
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
